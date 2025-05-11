@@ -1,8 +1,4 @@
-from pathlib import Path
-
-# Save the modified `mms_utils.py` to disk to give the user
-output_path = Path("/mnt/data/mms_utils_aligo.py")
-output_path.write_text("""
+# mms_utils.py
 import streamlit as st
 import requests
 import traceback
@@ -11,7 +7,7 @@ import re
 def normalize_phone_number(phone_number_str):
     if not phone_number_str or not isinstance(phone_number_str, str):
         return None
-    digits = re.sub(r'\\D', '', phone_number_str)
+    digits = re.sub(r'\D', '', phone_number_str)
     if digits.startswith('010') and len(digits) == 11:
         return digits
     elif digits.startswith('10') and len(digits) == 10:
@@ -69,5 +65,9 @@ def send_mms_with_image(recipient_phone, image_bytes, filename="견적서.jpg", 
         st.error(f"예외 발생: {e}")
         traceback.print_exc()
         return False
-""")
-output_path
+
+# from pathlib import Path
+# # Save the modified `mms_utils.py` to disk to give the user
+# output_path = Path("/mnt/data/mms_utils_aligo.py") # 이 부분은 제거하거나 주석 처리합니다.
+# output_path.write_text(...) # 이 부분은 제거하거나 주석 처리합니다.
+# output_path # 이 부분은 제거하거나 주석 처리합니다.
