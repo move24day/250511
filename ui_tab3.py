@@ -1,4 +1,4 @@
-# ui_tab3.py (결제 옵션 UI 제거, 요약 정보 표시 수정은 유지)
+# ui_tab3.py (결제 옵션 UI 제거, 요약 정보 표시 수정은 유지, Excel 및 이미지 생성/다운로드 통합)
 import streamlit as st
 import pandas as pd
 import io
@@ -12,12 +12,12 @@ try:
     import data
     import utils
     import calculations
-    import pdf_generator
+    import pdf_generator # PDF 생성 및 이미지 변환에 필요
     import excel_filler
     import email_utils
     import callbacks
     from state_manager import MOVE_TYPE_OPTIONS
-    import mms_utils
+    import mms_utils # MMS 발송에 필요
 except ImportError as e:
     st.error(f"UI Tab 3: 필수 모듈 로딩 실패 - {e}")
     if hasattr(e, "name"):
@@ -185,24 +185,23 @@ def render_tab3():
             cols_date[i].checkbox(option, key=date_keys[i], help=f"{surcharge:,}원 할증" if surcharge > 0 else "")
     st.divider()
 
-    # --- 비용 조정 및 계약금 (결제 옵션 UI는 Tab1으로 이동) ---
     with st.container(border=True):
         st.subheader("💰 수기 조정 및 계약금")
-        cols_adj_new = st.columns(2) 
+        cols_adj_new = st.columns(2)
         with cols_adj_new[0]:
             st.number_input("📝 계약금", min_value=0, step=10000, key="deposit_amount", format="%d")
         with cols_adj_new[1]:
             st.number_input("💰 추가 조정 (+/-)", step=10000, key="adjustment_amount", format="%d")
-        
-        cols_extra_fees = st.columns(2) 
+
+        cols_extra_fees = st.columns(2)
         with cols_extra_fees[0]:
             st.number_input("🪜 사다리 추가요금", min_value=0, step=10000, key="regional_ladder_surcharge", format="%d")
         if st.session_state.get("has_via_point", False):
              with cols_extra_fees[1]:
                 st.number_input("↪️ 경유지 추가요금", min_value=0, step=10000, key="via_point_surcharge", format="%d")
-        else: 
+        else:
             with cols_extra_fees[1]:
-                pass 
+                pass
     st.divider()
 
     st.header("💵 최종 견적 결과")
@@ -214,7 +213,7 @@ def render_tab3():
             if st.session_state.get("is_storage_move"):
                 m_dt, a_dt = st.session_state.get("moving_date"), st.session_state.get("arrival_date")
                 st.session_state.storage_duration = max(1, (a_dt - m_dt).days + 1) if isinstance(m_dt, date) and isinstance(a_dt, date) and a_dt >= m_dt else 1
-            
+
             current_state_dict = st.session_state.to_dict()
             if hasattr(calculations, "calculate_total_moving_cost") and callable(calculations.calculate_total_moving_cost):
                 total_cost_display, cost_items_display, personnel_info_display = calculations.calculate_total_moving_cost(current_state_dict)
@@ -224,7 +223,7 @@ def render_tab3():
                     "personnel_info_for_pdf": personnel_info_display
                 })
                 if any(isinstance(item, (list, tuple)) and len(item) > 0 and str(item[0]) == "오류" for item in cost_items_display): has_cost_error = True
-            else: 
+            else:
                 st.error("최종 비용 계산 함수 로드 실패."); has_cost_error = True
                 st.session_state.update({"calculated_cost_items_for_pdf": [], "total_cost_for_pdf": 0, "personnel_info_for_pdf": {}})
 
@@ -260,18 +259,18 @@ def render_tab3():
                 try:
                     customer_name_summary = st.session_state.get('customer_name', '')
                     phone_summary = st.session_state.get('customer_phone', '')
-                    email_summary = st.session_state.get('customer_email', '') 
+                    email_summary = st.session_state.get('customer_email', '')
 
-                    vehicle_type_summary = final_selected_vehicle_calc 
+                    vehicle_type_summary = final_selected_vehicle_calc
                     vehicle_tonnage_summary = ""
                     if isinstance(vehicle_type_summary, str):
                         match_summary = re.search(r'(\d+(\.\d+)?\s*톤)', vehicle_type_summary)
                         vehicle_tonnage_summary = match_summary.group(1).strip() if match_summary else vehicle_type_summary
-                    
-                    p_info_summary = personnel_info_display 
+
+                    p_info_summary = personnel_info_display
                     men_summary = p_info_summary.get('final_men', 0)
-                    women_summary = p_info_summary.get('final_women', 0) 
-                    
+                    women_summary = p_info_summary.get('final_women', 0)
+
                     if women_summary > 0:
                         ppl_summary = f"{men_summary}+{women_summary}명"
                     else:
@@ -281,11 +280,11 @@ def render_tab3():
                         method_str = str(st.session_state.get(method_key, '')).strip()
                         return method_str.split(" ")[0] if method_str else "정보 없음"
                     from_method_full, to_method_full = get_method_full_name('from_method'), get_method_full_name('to_method')
-                    
+
                     deposit_for_summary = int(st.session_state.get("deposit_amount", 0))
                     calculated_total_for_summary = int(total_cost_display) if isinstance(total_cost_display, (int,float)) else 0
                     remaining_for_summary = calculated_total_for_summary - deposit_for_summary
-                    
+
                     from_addr_summary = st.session_state.get('from_location', '정보 없음')
                     to_addr_summary = st.session_state.get('to_location', '정보 없음')
 
@@ -297,15 +296,15 @@ def render_tab3():
                             q_mb_s = int(st.session_state.get(f"qty_{move_t_summary}_{b_name_summary}_중박스", st.session_state.get(f"qty_{move_t_summary}_{b_name_summary}_중자바구니", 0)))
                             q_book_s = int(st.session_state.get(f"qty_{move_t_summary}_{b_name_summary}_책바구니", 0))
                         except: pass
-                    
-                    bask_display_parts = [] 
+
+                    bask_display_parts = []
                     if q_b_s > 0: bask_display_parts.append(f"바구니 {q_b_s}개")
                     if q_mb_s > 0: bask_display_parts.append(f"중박스 {q_mb_s}개")
                     if q_book_s > 0: bask_display_parts.append(f"책바구니 {q_book_s}개")
-                    bask_summary_str = ", ".join(bask_display_parts) if bask_display_parts else "바구니 정보 없음" 
-                    
+                    bask_summary_str = ", ".join(bask_display_parts) if bask_display_parts else "바구니 정보 없음"
+
                     note_summary = st.session_state.get('special_notes', '')
-                    
+
                     is_storage_move = st.session_state.get('is_storage_move', False)
                     storage_prefix_text = "(보관) " if is_storage_move else ""
                     storage_details_text = ""
@@ -326,19 +325,19 @@ def render_tab3():
                     if customer_name_summary: st.text(f"{customer_name_summary}")
                     if phone_summary and phone_summary != '-': st.text(f"{phone_summary}")
                     if email_summary and email_summary != '-': st.text(f"{email_summary}")
-                    st.text("") 
+                    st.text("")
                     st.text(f"{vehicle_tonnage_summary if vehicle_tonnage_summary else vehicle_type_summary} / {ppl_summary}")
-                    st.text("") 
+                    st.text("")
                     st.text(f"출발지: {from_method_full}")
                     st.text(f"도착지: {to_method_full}")
                     if st.session_state.get('has_via_point', False): st.text(f"경유지: {get_method_full_name('via_point_method')}")
-                    st.text("") 
+                    st.text("")
                     st.text(f"계약금 {deposit_for_summary:,.0f}원 / 잔금 {remaining_for_summary:,.0f}원")
                     if payment_options_summary: st.text(f"({payment_options_summary})")
-                    st.text("") 
+                    st.text("")
                     st.text(f"총 {calculated_total_for_summary:,.0f}원 중")
-                    
-                    processed_for_summary = set() 
+
+                    processed_for_summary = set()
                     if isinstance(cost_items_display, list):
                         for item_name_disp, item_cost_disp, _ in cost_items_display:
                             if str(item_name_disp) == "기본 운임" and item_cost_disp != 0:
@@ -360,20 +359,20 @@ def render_tab3():
                             if name_str not in processed_for_summary and ("부가세" in name_str or "카드" in name_str) and cost_int != 0:
                                 st.text(f"{name_str} {cost_int:,}")
                                 processed_for_summary.add(name_str)
-                    if not processed_for_summary and calculated_total_for_summary != 0 : st.text(f"기타 비용 합계 {calculated_total_for_summary:,}") 
+                    if not processed_for_summary and calculated_total_for_summary != 0 : st.text(f"기타 비용 합계 {calculated_total_for_summary:,}")
                     elif not processed_for_summary and calculated_total_for_summary == 0: st.text("세부 비용 내역 없음")
-                    st.text("") 
-                    
+                    st.text("")
+
                     st.text("출발지 주소:"); st.text(from_addr_summary)
-                    if is_storage_move and storage_details_text: st.text(storage_details_text) 
-                    st.text("") 
+                    if is_storage_move and storage_details_text: st.text(storage_details_text)
+                    st.text("")
                     st.text("도착지 주소:"); st.text(to_addr_summary)
-                    st.text("") 
+                    st.text("")
                     if st.session_state.get('has_via_point', False):
                         st.text("경유지 주소:"); st.text(st.session_state.get('via_point_location', '정보 없음'))
                         st.text("")
-                    st.text(bask_summary_str) 
-                    st.text("") 
+                    st.text(bask_summary_str)
+                    st.text("")
                     if note_summary and note_summary.strip() and note_summary != '-':
                         st.text("요구사항:")
                         for note_line in note_summary.strip().replace('\r\n', '\n').split('\n'): st.text(note_line.strip())
@@ -386,10 +385,8 @@ def render_tab3():
 
             st.subheader("📄 견적서 생성, 발송 및 다운로드")
             can_generate_anything = bool(final_selected_vehicle_calc) and not has_cost_error and st.session_state.get("calculated_cost_items_for_pdf") and st.session_state.get("total_cost_for_pdf", 0) > 0
-            cols_actions_main = st.columns([1, 1, 1]); cols_actions_email = st.columns(1) # 레이아웃 유지
-            
-            # ... (MMS, PDF, Excel, Email 버튼 로직은 이전 답변 내용과 동일하게 유지) ...
-            # (이 부분은 길어서 생략하지만, 이전 답변의 코드를 그대로 사용하시면 됩니다.)
+            cols_actions_main = st.columns([1, 1, 1]); cols_actions_email = st.columns(1)
+
             with cols_actions_main[0]: # MMS
                 st.markdown("**① 이미지 견적서 (MMS)**")
                 mms_possible = (hasattr(mms_utils, "send_mms_with_image") and hasattr(pdf_generator, "generate_pdf") and hasattr(pdf_generator, "generate_quote_image_from_pdf") and can_generate_anything and st.session_state.get("customer_phone"))
@@ -434,28 +431,104 @@ def render_tab3():
                 elif not can_generate_anything: st.caption("견적 내용 확인 필요")
                 else: st.caption("PDF 생성 불가")
 
-            with cols_actions_main[2]: # Excel
-                st.markdown("**③ Final 견적서 (Excel)**")
+
+            # --- 수정된 "Excel 및 견적 이미지 생성" 섹션 ---
+            with cols_actions_main[2]:
+                st.markdown("**③ 견적서 파일 생성 (Excel, 이미지)**")
+
                 excel_possible = hasattr(excel_filler, "fill_final_excel_template") and bool(final_selected_vehicle_calc)
-                if excel_possible:
-                    if st.button("📊 Excel 생성 및 다운로드", key="excel_final_download_main"):
+                pdf_possible_for_image = hasattr(pdf_generator, "generate_pdf") and can_generate_anything
+                image_conversion_possible = hasattr(pdf_generator, "generate_quote_image_from_pdf") and pdf_generator._PDF2IMAGE_AVAILABLE and pdf_generator._PILLOW_AVAILABLE
+
+                if st.button("📊 Excel 및 견적 이미지 생성", key="generate_excel_and_image_main"):
+                    actions_success_excel = False
+                    actions_success_image = False
+
+                    # 1. Excel 생성
+                    if excel_possible:
                         latest_total_cost_excel, latest_cost_items_excel, latest_personnel_info_excel = calculations.calculate_total_moving_cost(st.session_state.to_dict())
                         with st.spinner("Excel 파일 생성 중..."):
                             filled_excel_data_dl = excel_filler.fill_final_excel_template(st.session_state.to_dict(), latest_cost_items_excel, latest_total_cost_excel, latest_personnel_info_excel)
                         if filled_excel_data_dl:
                             st.session_state['final_excel_data_for_download'] = filled_excel_data_dl
                             st.success("✅ Excel 생성 완료!")
+                            actions_success_excel = True
                         else:
                             st.error("❌ Excel 파일 생성 실패.")
                             if 'final_excel_data_for_download' in st.session_state: del st.session_state['final_excel_data_for_download']
-                    if st.session_state.get('final_excel_data_for_download'):
-                        fname_excel_dl = f"최종견적서_{st.session_state.get('customer_name', '고객')}_{utils.get_current_kst_time_str('%y%m%d')}.xlsx"
-                        st.download_button(label="📥 다운로드 (Excel)", data=st.session_state['final_excel_data_for_download'], file_name=fname_excel_dl, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key='dl_btn_excel_main')
-                    elif 'final_excel_data_for_download' not in st.session_state and excel_possible: st.caption("생성 버튼을 눌러주세요.")
-                elif not hasattr(excel_filler, "fill_final_excel_template"): st.caption("Excel 생성 모듈 오류")
-                elif not bool(final_selected_vehicle_calc): st.caption("차량 미선택")
-                else: st.caption("Excel 생성 불가")
-            
+                    else:
+                        st.warning("Excel을 생성할 수 없습니다. (조건 미충족)")
+
+                    # 2. PDF 생성 및 이미지 변환
+                    if pdf_possible_for_image and image_conversion_possible:
+                        customer_name_img = st.session_state.get("customer_name", "고객")
+                        pdf_args_img = {
+                            "state_data": st.session_state.to_dict(),
+                            "calculated_cost_items": st.session_state.get("calculated_cost_items_for_pdf", []),
+                            "total_cost": st.session_state.get("total_cost_for_pdf", 0),
+                            "personnel_info": st.session_state.get("personnel_info_for_pdf", {})
+                        }
+                        with st.spinner("견적서 PDF 생성 중 (이미지용)..."):
+                            pdf_bytes_img = pdf_generator.generate_pdf(**pdf_args_img)
+
+                        if pdf_bytes_img:
+                            with st.spinner("PDF를 이미지로 변환 중..."):
+                                image_bytes_converted = pdf_generator.generate_quote_image_from_pdf(pdf_bytes_img, poppler_path=None, image_format='JPEG') # JPEG 또는 PNG
+
+                            if image_bytes_converted:
+                                st.session_state['quote_image_data_for_download'] = image_bytes_converted
+                                st.success("✅ 견적서 이미지 변환 완료!")
+                                actions_success_image = True
+                            else:
+                                st.error("❌ 견적서 이미지 변환 실패.")
+                                if 'quote_image_data_for_download' in st.session_state: del st.session_state['quote_image_data_for_download']
+                        else:
+                            st.error("❌ 견적서 PDF 생성 실패 (이미지용).")
+                            if 'quote_image_data_for_download' in st.session_state: del st.session_state['quote_image_data_for_download']
+                    elif not pdf_possible_for_image:
+                         st.warning("견적서 이미지를 생성할 수 없습니다. (PDF 생성 조건 미충족)")
+                    elif not image_conversion_possible:
+                         st.warning("견적서 이미지를 생성할 수 없습니다. (이미지 변환 모듈 또는 라이브러리 문제)")
+
+                    if not actions_success_excel and not actions_success_image :
+                        st.error("Excel과 이미지 파일 생성 모두 실패했습니다.")
+                    elif not actions_success_excel :
+                        st.warning("Excel 파일 생성에 실패했습니다.")
+                    elif not actions_success_image :
+                         st.warning("견적서 이미지 생성에 실패했습니다.")
+
+
+                # --- 다운로드 버튼 영역 ---
+                # Excel 다운로드 버튼
+                if st.session_state.get('final_excel_data_for_download') and excel_possible:
+                    fname_excel_dl = f"최종견적서_{st.session_state.get('customer_name', '고객')}_{utils.get_current_kst_time_str('%y%m%d')}.xlsx"
+                    st.download_button(
+                        label="📥 다운로드 (Excel)",
+                        data=st.session_state['final_excel_data_for_download'],
+                        file_name=fname_excel_dl,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key='dl_btn_excel_final_section'
+                    )
+                elif excel_possible : st.caption("파일 생성 버튼을 눌러 Excel 파일을 준비하세요.")
+                else: st.caption("Excel 생성 불가 (견적 내용 또는 모듈 확인)")
+
+
+                # 이미지 다운로드 버튼
+                if st.session_state.get('quote_image_data_for_download') and pdf_possible_for_image and image_conversion_possible:
+                    image_format_ext = 'jpg' # generate_quote_image_from_pdf 에서 JPEG로 저장한 경우
+                    # image_format_ext = 'png' # PNG로 저장한 경우
+                    fname_image_dl = f"견적서이미지_{st.session_state.get('customer_name', '고객')}_{utils.get_current_kst_time_str('%y%m%d')}.{image_format_ext}"
+                    st.download_button(
+                        label=f"🖼️ 다운로드 (견적서 이미지 .{image_format_ext})",
+                        data=st.session_state['quote_image_data_for_download'],
+                        file_name=fname_image_dl,
+                        mime=f"image/{image_format_ext.lower()}", # image/jpeg 또는 image/png
+                        key='dl_btn_quote_image_final_section'
+                    )
+                elif pdf_possible_for_image and image_conversion_possible: st.caption("파일 생성 버튼을 눌러 견적서 이미지를 준비하세요.")
+                else: st.caption("견적서 이미지 생성 불가 (견적 내용 또는 PDF/이미지 변환 모듈 확인)")
+            # --- 수정된 섹션 끝 ---
+
             with cols_actions_email[0]: # Email
                 st.markdown("**④ 견적서 이메일 발송 (PDF 첨부)**")
                 email_possible = (hasattr(email_utils, "send_quote_email") and hasattr(pdf_generator, "generate_pdf") and can_generate_anything and st.session_state.get("customer_email"))
