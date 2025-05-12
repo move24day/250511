@@ -1,4 +1,4 @@
-# utils.py (get_item_qty 함수 추가)
+# utils.py
 
 import re
 from datetime import datetime
@@ -38,6 +38,12 @@ def extract_phone_number_part(phone_str, length=4, default="번호없음"):
         return digits # 짧으면 있는 숫자라도 반환
     else:
         return default # 숫자가 없으면 기본값 반환
+
+def sanitize_phone_number(phone_str):
+    """전화번호 문자열에서 숫자만 추출하여 반환합니다."""
+    if not phone_str or not isinstance(phone_str, str):
+        return ""  # 유효하지 않은 입력이면 빈 문자열 반환
+    return re.sub(r'\D', '', phone_str)
 
 # --- !!! get_item_qty 함수 정의 추가 !!! ---
 def get_item_qty(state_data, item_name_to_find):

@@ -12,7 +12,8 @@ def normalize_phone_number(phone_number_str):
         return digits
     elif digits.startswith('10') and len(digits) == 10:
         return '0' + digits
-    st.warning(f"전화번호({phone_number_str})가 표준 형식에 맞지 않을 수 있습니다. MMS 게이트웨이 요구사항을 확인하세요.")
+    # 아래 st.warning 라인을 주석 처리하여 불필요한 경고 방지
+    # st.warning(f"전화번호({phone_number_str})가 표준 형식에 맞지 않을 수 있습니다. MMS 게이트웨이 요구사항을 확인하세요.")
     return digits
 
 def send_mms_with_image(recipient_phone, image_bytes, filename="견적서.jpg", text_message="견적서가 도착했습니다."):
